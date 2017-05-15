@@ -1,6 +1,6 @@
 {
     "name": "flatcurry-annotated",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "author": "Michael Hanus <Michael Hanus>, Jonas Oberschweiber <jonas@oberschweiber.com>, Bjoern Peemoeller <bpe@informatik.uni-kiel.de>",
     "maitainer": "Michael Hanus <Michael Hanus>",
     "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
@@ -10,11 +10,11 @@
     "license": "BSD-3-Clause",
     "licenseFile": "LICENSE",
     "dependencies": {
-        "rewriting": ">= 0.0.1"
+        "rewriting": ">= 2.0.0"
     },
     "compilerCompatibility": {
-        "pakcs": ">= 1.14.0, < 2.0.0",
-        "kics2": ">= 0.5.0, < 2.0.0"
+        "pakcs": ">= 2.0.0",
+        "kics2": ">= 2.0.0"
     },
     "exportedModules": [ "FlatCurry.Annotated.Types",
                          "FlatCurry.Annotated.Goodies",

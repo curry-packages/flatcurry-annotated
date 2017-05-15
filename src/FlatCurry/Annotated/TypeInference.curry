@@ -605,7 +605,7 @@ toQName str = (fst split, snd split)
 --- @param xs - the list to split
 --- @param x - the value to split at
 --- @return a tuple of the lists before and after the split
-splitFirst :: [a] -> a -> ([a], [a])
+splitFirst :: Eq a => [a] -> a -> ([a], [a])
 splitFirst []     _ = ([], [])
 splitFirst (x:xs) c
   | x == c    = ([], xs)
@@ -634,7 +634,7 @@ type NormState   = (Int, FM Int Int)
 type Normalize a = a -> ES () NormState a
 
 --- Run a normalization operation.
-normalize :: Normalize a -> a -> ES String s a
+normalize :: Show a => Normalize a -> a -> ES String s a
 normalize norm x = case evalES (norm x) (0, emptyFM (<)) of
   Left  _  -> failES $ "Normalization failed for: " ++ show x
   Right x' -> returnES x'
