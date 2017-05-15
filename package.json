@@ -1,0 +1,28 @@
+{
+    "name": "flatcurry-annotated",
+    "version": "1.0.0",
+    "author": "Michael Hanus <Michael Hanus>, Jonas Oberschweiber <jonas@oberschweiber.com>, Bjoern Peemoeller <bpe@informatik.uni-kiel.de>",
+    "maitainer": "Michael Hanus <Michael Hanus>",
+    "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
+    "category": [ "Metaprogramming" ],
+    "description": "This package contain libraries to represent FlatCurry programs with arbitrary annotations. Furthermore, it contains libraries to annotate each expression occurring in a given FlatCurry program with type information.",
+    "category": [ "Metaprogramming" ],
+    "license": "BSD-3-Clause",
+    "licenseFile": "LICENSE",
+    "dependencies": {
+        "rewriting": ">= 0.0.1"
+    },
+    "compilerCompatibility": {
+        "pakcs": ">= 1.14.0, < 2.0.0",
+        "kics2": ">= 0.5.0, < 2.0.0"
+    },
+    "exportedModules": [ "FlatCurry.Annotated.Types",
+                         "FlatCurry.Annotated.Goodies",
+                         "FlatCurry.Annotated.Pretty",
+                         "FlatCurry.Annotated.TypeSubst",
+                         "FlatCurry.Annotated.TypeInference" ],
+    "source": {
+        "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/flatcurry-annotated.git",
+        "tag": "$version"
+    }
+}
