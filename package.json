@@ -1,7 +1,7 @@
 {
     "name": "flatcurry-annotated",
     "version": "1.0.0",
-    "author": "Michael Hanus <mh@informatik.uni-kiel.de>, Jonas Oberschweiber <jonas@oberschweiber.com>, Bjoern Peemoeller <bpe@informatik.uni-kiel.de>",
+    "author": "Michael Hanus <mh@informatik.uni-kiel.de>, Jonas Oberschweiber <jonas@oberschweiber.com>, Bjoern Peemoeller <bjp@informatik.uni-kiel.de>",
     "maitainer": "Michael Hanus <mh@informatik.uni-kiel.de>",
     "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
     "category": [ "Metaprogramming" ],
