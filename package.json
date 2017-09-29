@@ -18,10 +18,10 @@
         "kics2": ">= 2.0.0"
     },
     "exportedModules": [ "FlatCurry.Annotated.Types",
+                         "FlatCurry.Annotated.Files",
                          "FlatCurry.Annotated.Goodies",
                          "FlatCurry.Annotated.Pretty",
-                         "FlatCurry.Annotated.TypeSubst",
-                         "FlatCurry.Annotated.TypeInference" ],
+                         "FlatCurry.Annotated.TypeSubst" ],
     "source": {
         "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/flatcurry-annotated.git",
         "tag": "$version"
