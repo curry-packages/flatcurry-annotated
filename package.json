@@ -21,7 +21,8 @@
                          "FlatCurry.Annotated.Files",
                          "FlatCurry.Annotated.Goodies",
                          "FlatCurry.Annotated.Pretty",
-                         "FlatCurry.Annotated.TypeSubst" ],
+                         "FlatCurry.Annotated.TypeSubst",
+                         "FlatCurry.Annotated.TypeInference" ],
     "source": {
         "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/flatcurry-annotated.git",
         "tag": "$version"
