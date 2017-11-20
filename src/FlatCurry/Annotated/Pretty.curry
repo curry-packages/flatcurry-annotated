@@ -9,7 +9,7 @@
 --- --------------------------------------------------------------------------
 module FlatCurry.Annotated.Pretty where
 
-import Pretty
+import Text.Pretty
 
 import FlatCurry.Annotated.Types
 

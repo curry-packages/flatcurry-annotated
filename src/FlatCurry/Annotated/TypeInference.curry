@@ -54,7 +54,7 @@ module FlatCurry.Annotated.TypeInference
 
 import           FiniteMap
 import           List                               (find)
-import qualified Pretty as P
+import qualified Text.Pretty as P
 
 import           ErrorState
 import           FlatCurry.Types
@@ -138,7 +138,7 @@ inferProgEnv te p = evalES (annProg p >+= inferAProg) (initTIM te)
 inferFunctionEnv :: TypeEnv -> Prog -> QName
                  -> Either String (AFuncDecl TypeExpr)
 inferFunctionEnv te (Prog _ _ _ fs _) f = case find ((== f) . funcName) fs of
-  Nothing -> Left $ P.pretty 80 $ P.text "No such function:" P.<+> ppQName f
+  Nothing -> Left $ P.showWidth 80 $ P.text "No such function:" P.<+> ppQName f
   Just fd -> evalES (annFunc fd >+= inferFunc) (initTIM te)
 
 --- Infers the types of a group of (possibly mutually recursive) functions.
@@ -377,7 +377,7 @@ annRule (External s) = flip AExternal s <$> nextTVar
 annExpr :: Expr -> TIM (AExpr TypeExpr)
 annExpr (Var       i) = lookupVarType i >+=
                         maybe (failES err) (\ty -> returnES (AVar ty i))
-  where err = P.pretty 80 $ P.text "Variable" P.<+> ppVarIndex i
+  where err = P.showWidth 80 $ P.text "Variable" P.<+> ppVarIndex i
                       P.<+> P.text "was not initialized with a type"
 annExpr (Lit       l) = nextTVar >+= \ty -> returnES (ALit ty l)
 annExpr (Comb t q es) = flip AComb t <$> nextTVar <*> getTypeVariant q
@@ -405,7 +405,7 @@ annVar v = nextTVar >+= \ty -> insertVarType v ty >+ returnES (v, ty)
 --- and must therefore be met. Otherwise, the type inference must be extended.
 checkShadowing :: VarIndex -> TIM ()
 checkShadowing v = lookupVarType v >+= maybe (returnES ()) (\_ -> failES err)
-  where err = P.pretty 80 $ P.text "shadowing with variable" P.<+> ppVarIndex v
+  where err = P.showWidth 80 $ P.text "shadowing with variable" P.<+> ppVarIndex v
 
 --- Converts the BranchExpr to an ABranchExpr, inserting TVars
 --- into all expressions
@@ -569,7 +569,7 @@ exprType = AFC.annExpr
 --- Solve a list of type equations using unification.
 solve :: P.Doc -> TypeEqs -> TIM AFCSubst
 solve what eqs = case unify (fromTypeEqs eqs) of
-  Left  err -> failES $ P.pretty 80 $ ppUnificationError err
+  Left  err -> failES $ P.showWidth 80 $ ppUnificationError err
                  P.<+> P.text "during type inference for:" P.<$$> P.nest 2 what
   Right sub -> returnES (mapFM (\_ -> toTypeExpr) sub)
 
