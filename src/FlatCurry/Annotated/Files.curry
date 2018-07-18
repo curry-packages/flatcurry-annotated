@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 --- This library supports meta-programming, i.e., the manipulation of
 --- Curry programs in Curry. This library defines I/O actions
---.  to read Curry programs and transform them into this representation.
+---  to read Curry programs and transform them into this representation.
 ---
 --- @author Michael Hanus
 --- @version October 2015
@@ -10,17 +10,16 @@
 
 module FlatCurry.Annotated.Files where
 
-import Directory       (doesFileExist)
-import Distribution    ( FrontendParams, FrontendTarget (..), defaultParams
-                       , setQuiet, inCurrySubdir, stripCurrySuffix
-                       , callFrontend, callFrontendWithParams
-                       , lookupModuleSourceInLoadPath, getLoadPathForModule
-                       )
-import FileGoodies     (getFileInPath, lookupFileInPath)
-import FilePath        (takeFileName, (</>), (<.>))
+import System.FilePath  (takeFileName, (</>), (<.>))
+import System.Directory (doesFileExist, getFileWithSuffix)
+import Distribution     ( FrontendParams, FrontendTarget (..), defaultParams
+                        , setQuiet, inCurrySubdir, stripCurrySuffix
+                        , callFrontend, callFrontendWithParams
+                        , lookupModuleSourceInLoadPath, getLoadPathForModule
+                        )
+import Data.Maybe       (isNothing)
+import ReadShowTerm     (readUnqualifiedTerm, showTerm)
 import FlatCurry.Annotated.Types
-import Maybe           (isNothing)
-import ReadShowTerm    (readUnqualifiedTerm, showTerm)
 
 readTypedFlatCurry :: String -> IO (AProg TypeExpr)
 readTypedFlatCurry progname =
@@ -32,8 +31,9 @@ readTypedFlatCurryWithParseOptions progname options = do
   case mbsrc of
     Nothing -> do -- no source file, try to find FlatCurry file in load path:
       loadpath <- getLoadPathForModule progname
-      filename <- getFileInPath (typedFlatCurryFileName (takeFileName progname)) [""]
-                                loadpath
+      filename <- getFileWithSuffix
+                    (typedFlatCurryFileName (takeFileName progname)) [""]
+                    loadpath
       readTypedFlatCurryFile filename
     Just (dir,_) -> do
       callFrontendWithParams TFCY options progname

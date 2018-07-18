@@ -37,7 +37,7 @@
 --- In case of any error, the type inference quits with an error message.
 ---
 --- IMPORTANT NOTE: The type inference is incomplete w.r.t. type classes
---- and for all types. This need to be extended in the future!
+--- and forall types. This need to be extended in the future!
 ---
 --- @author  Jonas Oberschweiber, Bjoern Peemoeller, Michael Hanus
 --- @version August 2016
@@ -52,11 +52,13 @@ module FlatCurry.Annotated.TypeInference
   , inferExpr, inferExprEnv
   ) where
 
-import           FiniteMap
-import           List                               (find)
+import qualified Data.Map as Map
+import           Data.List                          (find)
 import qualified Text.Pretty as P
 
-import           ErrorState
+import           Control.Monad.Trans.Error
+import           Control.Monad.Trans.State
+import           Control.Applicative
 import           FlatCurry.Types
 import           FlatCurry.Files
 import           FlatCurry.Goodies                  (branchExpr, funcName)
@@ -68,7 +70,7 @@ import           FlatCurry.Annotated.TypeSubst
 import           SCC
 import           Rewriting.Term
 import           Rewriting.Unification
-import           Unsafe
+import           System.IO.Unsafe
 
 -- ---------------------------------------------------------------------------
 -- Public Interface
@@ -126,7 +128,7 @@ inferExpr p e = getTypeEnv p >>= \te -> return (inferExprEnv te e)
 --- @param p  - the Prog to infer
 --- @return the inferred program or an error
 inferProgEnv :: TypeEnv -> Prog -> Either String (AProg TypeExpr)
-inferProgEnv te p = evalES (annProg p >+= inferAProg) (initTIM te)
+inferProgEnv te p = evalErrorState (annProg p >>= inferAProg) (initTIM te)
 
 --- Infers the types of a single function specified by its qualified name.
 --- Uses the given type environment instead of generating a new one.
@@ -139,7 +141,7 @@ inferFunctionEnv :: TypeEnv -> Prog -> QName
                  -> Either String (AFuncDecl TypeExpr)
 inferFunctionEnv te (Prog _ _ _ fs _) f = case find ((== f) . funcName) fs of
   Nothing -> Left $ P.showWidth 80 $ P.text "No such function:" P.<+> ppQName f
-  Just fd -> evalES (annFunc fd >+= inferFunc) (initTIM te)
+  Just fd -> evalErrorState (annFunc fd >>= inferFunc) (initTIM te)
 
 --- Infers the types of a group of (possibly mutually recursive) functions.
 --- Note that the functions are only monomorphically instantiated, i.e.,
@@ -148,16 +150,16 @@ inferFunctionEnv te (Prog _ _ _ fs _) f = case find ((== f) . funcName) fs of
 --- and will be specialised to the inferred type.
 inferNewFunctionsEnv :: TypeEnv -> String -> [FuncDecl]
                      -> Either String [AFuncDecl TypeExpr]
-inferNewFunctionsEnv te mid fs = evalES (infer (depGraph mid fs)) (initTIM te)
+inferNewFunctionsEnv te mid fs = evalErrorState (infer (depGraph mid fs)) (initTIM te)
   where
-  infer fss     = concatMapES inferGroup fss >+= \fs' ->
-                  mapES (flip extract fs') fs
-  inferGroup g  = annFuncGroup g >+= inferFuncGroup                 >+= \afs ->
-                  extendTypeEnv [(f, ty) | AFunc f _ _ ty _ <- afs] >+
-                  returnES afs
+  infer fss     = concatMapM inferGroup fss >>= \fs' ->
+                  mapM (flip extract fs') fs
+  inferGroup g  = annFuncGroup g >>= inferFuncGroup                 >>= \afs ->
+                  extendTypeEnv [(f, ty) | AFunc f _ _ ty _ <- afs] >>
+                  return afs
   extract f afs = case find ((== funcName f) . AFC.funcName) afs of
-    Just af -> returnES af
-    Nothing -> failES "Internal error: extract"
+    Just af -> return af
+    Nothing -> throwError "Internal error: extract"
 
 --- Infers the types of a single expression.
 --- Uses the given type environment instead of generating a new one.
@@ -166,7 +168,10 @@ inferNewFunctionsEnv te mid fs = evalES (infer (depGraph mid fs)) (initTIM te)
 --- @param e  - the expression
 --- @return the inferred expression or an error
 inferExprEnv :: TypeEnv -> Expr -> Either String (AExpr TypeExpr)
-inferExprEnv te e = evalES (annExpr e >+= inferAExpr) (initTIM te)
+inferExprEnv te e = evalErrorState (annExpr e >>= inferAExpr) (initTIM te)
+
+evalErrorState :: ErrorT e (State s) a -> s -> Either e a
+evalErrorState es s = evalState (runErrorT es) s
 
 -- ---------------------------------------------------------------------------
 -- Computation of dependency graph and strongly connected components
@@ -201,7 +206,7 @@ depGraph mid = scc def use
 -- ---------------------------------------------------------------------------
 
 --- A type environment.
-type TypeEnv = FM QName TypeExpr
+type TypeEnv = Map.Map QName TypeExpr
 
 --- Looks up a type with a qualified name in a type environment.
 ---
@@ -209,7 +214,7 @@ type TypeEnv = FM QName TypeExpr
 --- @param q   - the qualified name to look for
 --- @return maybe the type
 lookupType :: TypeEnv -> QName -> Maybe TypeExpr
-lookupType = lookupFM
+lookupType = flip Map.lookup
 
 --- Extract the type environment from the given Prog.
 ---
@@ -251,7 +256,7 @@ getTypeEnvFromProgEnv env prog@(Prog _ imps _ _ _) = case extract imps of
 --- @param ps - the list of Progs
 --- @return a type environment
 extractKnownTypes :: [Prog] -> TypeEnv
-extractKnownTypes ps = listToFM (<) $ concatMap extractProg ps
+extractKnownTypes ps = Map.fromList $ concatMap extractProg ps
  where
   extractProg :: Prog -> [(QName, TypeExpr)]
   extractProg (Prog _ _ td fd _)
@@ -280,42 +285,45 @@ extractKnownTypes ps = listToFM (<) $ concatMap extractProg ps
 --- The monad contains an `Int` value for fresh type variable generation
 --- and a mapping from variable indices to their associated type
 --- variables. It returns a `String` if an error occured.
-type TIM a = ES String (TypeEnv, Int, TypeEnv, FM Int TypeExpr) a
+type TIS = (TypeEnv, Int, TypeEnv, Map.Map Int TypeExpr)
+type TIM a =  ErrorT String (State TIS) a
 
 --- Initial TIM state.
-initTIM :: TypeEnv -> (TypeEnv, Int, TypeEnv, FM Int TypeExpr)
-initTIM te = (te, 0, emptyFM (<), emptyFM (<))
+initTIM :: TypeEnv -> TIS
+initTIM te = (te, 0, Map.empty, Map.empty)
 
 extendTypeEnv :: [(QName, TypeExpr)] -> TIM ()
-extendTypeEnv ftys = gets >+= \ (te, v, fe, ve) ->
-                     puts (addListToFM te ftys, v, fe, ve)
+extendTypeEnv ftys = lift (get >>= \ (te, v, fe, ve) ->
+                           put (Map.insertList ftys te, v, fe, ve))
 
 --- Retrieve the next fresh type variable.
 nextTVar :: TIM TypeExpr
-nextTVar = gets >+= \ (te, n, fun2Ty, var2Ty) ->
-           puts (te, n + 1, fun2Ty, var2Ty) >+ returnES (TVar n)
+nextTVar = lift (get >>= \ (te, n, fun2Ty, var2Ty) ->
+                 put (te, n + 1, fun2Ty, var2Ty) >> return (TVar n))
 
 --- Intialize the mapping from variables to type variables.
 initVarTypes :: TIM ()
-initVarTypes = modify $ \ (te, n, fe, _) -> (te, n, fe, emptyFM (<))
+initVarTypes = lift $ modify $ \ (te, n, fe, _) -> (te, n, fe, Map.empty)
 
 --- Intialize the type signature environment, i.e., delete all associations.
 initSigEnv :: TIM ()
-initSigEnv = modify $ \ (te, n, _, ve) -> (te, n, emptyFM (<), ve)
+initSigEnv = lift $ modify $ \ (te, n, _, ve) -> (te, n, Map.empty, ve)
 
 --- Insert a new variable/type variable association.
 insertVarType :: Int -> TypeExpr -> TIM ()
-insertVarType v ty = modify $ \ (te, n, fe, var2Ty) ->
-                                 (te, n, fe, addToFM var2Ty v ty)
+insertVarType v ty = lift $ modify $ \ (te, n, fe, var2Ty) ->
+                                        (te, n, fe, Map.insert v ty var2Ty)
 
 --- Insert a new function/type signature association.
 insertFunType :: QName -> TypeExpr -> TIM ()
-insertFunType f sig = freshVariant sig >+= \ty ->
-                      modify $ \ (te, n, fe, ve) -> (te, n, addToFM fe f ty, ve)
+insertFunType f sig = freshVariant sig >>= \ty ->
+                      lift $ modify $ \ (te, n, fe, ve) ->
+                                         (te, n, Map.insert f ty fe, ve)
 
 --- Look up the type variable associated to a variable.
 lookupVarType :: Int -> TIM (Maybe TypeExpr)
-lookupVarType v = gets >+= \ (_, _, _, var2Ty) -> returnES (lookupFM var2Ty v)
+lookupVarType v = lift (get >>= \ (_, _, _, var2Ty) ->
+                                   return (Map.lookup v var2Ty))
 
 --- Looks up a type in the type assumption or the type signature environment.
 --- Types found in the type assumption are instantiated to a fresh variant.
@@ -323,11 +331,11 @@ lookupVarType v = gets >+= \ (_, _, _, var2Ty) -> returnES (lookupFM var2Ty v)
 --- @param q - the qualified name of the type to look up
 --- @return its type
 getTypeVariant :: QName -> TIM (QName, TypeExpr)
-getTypeVariant f = gets >+= \ (env, _, fe, _) -> case lookupType env f of
-  Nothing -> case lookupFM fe f of
-    Nothing -> failES $ "Internal error: getTypeVariant " ++ show f
-    Just ty -> returnES (f, ty)
-  Just t  -> freshVariant t >+= \ty -> returnES (f, ty)
+getTypeVariant f = lift get >>= \ (env, _, fe, _) -> case lookupType env f of
+  Nothing -> case Map.lookup f fe of
+    Nothing -> throwError $ "Internal error: getTypeVariant " ++ show f
+    Just ty -> return (f, ty)
+  Just t  -> freshVariant t >>= \ty -> return (f, ty)
 
 --- Compute a fresh variant of a given type expression.
 ---
@@ -337,13 +345,13 @@ freshVariant :: TypeExpr -> TIM TypeExpr
 freshVariant ty = snd <$> rename [] ty
  where
   rename ren (TVar       i) = case lookup i ren of
-    Just j  -> returnES (ren, j)
-    Nothing -> nextTVar >+= \j -> returnES ((i, j) : ren, j)
-  rename ren (FuncType a b) = rename ren  a >+= \ (ren1, a') ->
-                              rename ren1 b >+= \ (ren2, b') ->
-                              returnES (ren2, FuncType a' b')
-  rename ren (TCons  t tys) = mapAccumES rename ren tys >+= \(ren', tys') ->
-                              returnES (ren', TCons t tys')
+    Just j  -> return (ren, j)
+    Nothing -> nextTVar >>= \j -> return ((i, j) : ren, j)
+  rename ren (FuncType a b) = rename ren  a >>= \ (ren1, a') ->
+                              rename ren1 b >>= \ (ren2, b') ->
+                              return (ren2, FuncType a' b')
+  rename ren (TCons  t tys) = mapAccumM rename ren tys >>= \(ren', tys') ->
+                              return (ren', TCons t tys')
 
 -- -----------------------------------------------------------------------------
 -- 2. Annotation, traversing the AST and inserting fresh type variables
@@ -355,56 +363,56 @@ freshVariant ty = snd <$> rename [] ty
 --- @return an AProg and the next TVar number in an TIM
 annProg :: Prog -> TIM (AProg TypeExpr)
 annProg (Prog mid is td fd od) =
-  (\afd -> AProg mid is td afd od) <$> mapES annFunc fd
+  (\afd -> AProg mid is td afd od) <$> mapM annFunc fd
 
 annFuncGroup :: [FuncDecl] -> TIM [AFuncDecl TypeExpr]
-annFuncGroup fs = initSigEnv >+ mapES (uncurry insertFunType) ftys >+
-                  mapES annFunc fs
+annFuncGroup fs = initSigEnv >> mapM (uncurry insertFunType) ftys >>
+                  mapM annFunc fs
   where ftys = [ (f, ty) | Func f _ _ ty _ <- fs]
 
 --- Converts the FuncDecl to an AFuncDecl, inserting TVars into all
 --- expressions.
 annFunc ::FuncDecl -> TIM (AFuncDecl TypeExpr)
 annFunc (Func qn a v _ r)
-  = initVarTypes >+ AFunc qn a v <$> (snd <$> getTypeVariant qn) <*> annRule r
+  = initVarTypes >> AFunc qn a v <$> (snd <$> getTypeVariant qn) <*> annRule r
 
 --- Converts the Rule to an ARule, inserting TVars into all expressions.
 annRule :: Rule -> TIM (ARule TypeExpr)
-annRule (Rule  vs e) = ARule <$> nextTVar <*> mapES annVar vs <*> annExpr e
+annRule (Rule  vs e) = ARule <$> nextTVar <*> mapM annVar vs <*> annExpr e
 annRule (External s) = flip AExternal s <$> nextTVar
 
 --- Converts the Expr to an AExpr, inserting TVars into all sub-expressions.
 annExpr :: Expr -> TIM (AExpr TypeExpr)
-annExpr (Var       i) = lookupVarType i >+=
-                        maybe (failES err) (\ty -> returnES (AVar ty i))
+annExpr (Var       i) = lookupVarType i >>=
+                        maybe (throwError err) (\ty -> return (AVar ty i))
   where err = P.showWidth 80 $ P.text "Variable" P.<+> ppVarIndex i
                       P.<+> P.text "was not initialized with a type"
-annExpr (Lit       l) = nextTVar >+= \ty -> returnES (ALit ty l)
+annExpr (Lit       l) = nextTVar >>= \ty -> return (ALit ty l)
 annExpr (Comb t q es) = flip AComb t <$> nextTVar <*> getTypeVariant q
-                                                  <*> mapES annExpr es
+                                                  <*> mapM annExpr es
 annExpr (Case t e bs) = flip ACase t <$> nextTVar <*> annExpr e
-                                                  <*> mapES annBranch bs
+                                                  <*> mapM annBranch bs
 annExpr (Or      a b) = AOr  <$> nextTVar <*> annExpr     a  <*> annExpr b
 annExpr (Let    ds e) = ALet <$> nextTVar <*> annBindings ds <*> annExpr e
  where annBindings bs = let (vs, es) = unzip bs in
-                        mapES annBound vs >+= \vs' ->
-                        mapES annExpr  es >+= \es' ->
-                        returnES (zip vs' es')
-       annBound v     = checkShadowing v >+ annVar v
-annExpr (Free   vs e) = AFree <$> nextTVar <*> mapES annFree vs <*> annExpr e
-  where annFree v     = checkShadowing v >+ annVar v
+                        mapM annBound vs >>= \vs' ->
+                        mapM annExpr  es >>= \es' ->
+                        return (zip vs' es')
+       annBound v     = checkShadowing v >> annVar v
+annExpr (Free   vs e) = AFree <$> nextTVar <*> mapM annFree vs <*> annExpr e
+  where annFree v     = checkShadowing v >> annVar v
 annExpr (Typed  e ty) = ATyped <$> nextTVar <*> annExpr e <*> freshVariant ty
 
 --- Annotate a variable with a fresh type variable.
 annVar :: VarIndex -> TIM (VarIndex, TypeExpr)
-annVar v = nextTVar >+= \ty -> insertVarType v ty >+ returnES (v, ty)
+annVar v = nextTVar >>= \ty -> insertVarType v ty >> return (v, ty)
 
 --- Checks whether a locally introduced variable is already defined in the
 --- surrounding scope, which indicates variable shadowing that is not allowed
 --- in FlatCurry files. This is our basic assumption in this type inferencer,
 --- and must therefore be met. Otherwise, the type inference must be extended.
 checkShadowing :: VarIndex -> TIM ()
-checkShadowing v = lookupVarType v >+= maybe (returnES ()) (\_ -> failES err)
+checkShadowing v = lookupVarType v >>= maybe (return ()) (\_ -> throwError err)
   where err = P.showWidth 80 $ P.text "shadowing with variable" P.<+> ppVarIndex v
 
 --- Converts the BranchExpr to an ABranchExpr, inserting TVars
@@ -422,8 +430,8 @@ annBranch (Branch p e) = ABranch <$> annPattern p <*> annExpr e
 --- @return the APattern and the new next TVar number in an TIM
 annPattern :: Pattern -> TIM (APattern TypeExpr)
 annPattern (Pattern c vs) = APattern <$> nextTVar <*> getTypeVariant c
-                                                  <*> mapES annPVar vs
-  where annPVar v = checkShadowing v >+ annVar v
+                                                  <*> mapM annPVar vs
+  where annPVar v = checkShadowing v >> annVar v
 annPattern (LPattern   l) = flip ALPattern l <$> nextTVar
 
 -- ---------------------------------------------------------------------------
@@ -452,19 +460,19 @@ mxs ++= mys = (++) <$> mxs <*> mys
 --- @return the inferred program or an error
 inferAProg :: AProg TypeExpr -> TIM (AProg TypeExpr)
 inferAProg (AProg mid is td fd od)
-  = (\fd' -> AProg mid is td fd' od) <$> mapES inferFunc fd
+  = (\fd' -> AProg mid is td fd' od) <$> mapM inferFunc fd
 
 --- Infers all types in the given function declaration group.
 inferFuncGroup :: [AFuncDecl TypeExpr] -> TIM [AFuncDecl TypeExpr]
 inferFuncGroup fs =
---   returnES (unsafePerformIO (mapIO_ print fs)) >+= \() ->
-  concatMapES (uncurry eqsRule) [(ty, r) | AFunc _ _ _ ty r <- fs] >+= \eqs ->
---   returnES (unsafePerformIO (putStrLn (ppTypeEqs eqs))) >+= \() ->
-  solve (P.text "functions" P.<+> doc) eqs >+= \ sigma ->
---   returnES (unsafePerformIO (putStrLn (showAFCSubst sigma))) >+= \() ->
-  mapES (normalize normFunc . substFunc sigma) fs >+= \afs ->
---   returnES (unsafePerformIO (mapIO_ print afs)) >+= \() ->
-  returnES afs
+--   return (unsafePerformIO (mapIO_ print fs)) >>= \() ->
+  concatMapM (uncurry eqsRule) [(ty, r) | AFunc _ _ _ ty r <- fs] >>= \eqs ->
+--   return (unsafePerformIO (putStrLn (ppTypeEqs eqs))) >>= \() ->
+  solve (P.text "functions" P.<+> doc) eqs >>= \ sigma ->
+--   return (unsafePerformIO (putStrLn (showAFCSubst sigma))) >>= \() ->
+  mapM (normalize normFunc . substFunc sigma) fs >>= \afs ->
+--   return (unsafePerformIO (mapIO_ print afs)) >>= \() ->
+  return afs
   where doc = P.hsep $ P.punctuate P.comma (map (ppQName . AFC.funcName) fs)
 
 --- Infers all types in the given function.
@@ -474,22 +482,22 @@ inferFuncGroup fs =
 --- @return the inferred function or an error
 inferFunc :: AFuncDecl TypeExpr -> TIM (AFuncDecl TypeExpr)
 inferFunc func@(AFunc _ _ _ ty r) =
-  eqsRule ty r >+= \ eqs    ->
-  solve (P.text "function" P.<+> ppQName (AFC.funcName func)) eqs >+= \ sigma ->
+  eqsRule ty r >>= \ eqs    ->
+  solve (P.text "function" P.<+> ppQName (AFC.funcName func)) eqs >>= \ sigma ->
   normalize normFunc (substFunc sigma func)
 
 --- Infer the type of an expression.
 inferAExpr :: AExpr TypeExpr -> TIM (AExpr TypeExpr)
-inferAExpr e = eqsExpr e >+= \eqs   ->
-               solve (P.text "expression" P.<+> ppExp e) eqs >+= \sigma ->
+inferAExpr e = eqsExpr e >>= \eqs   ->
+               solve (P.text "expression" P.<+> ppExp e) eqs >>= \sigma ->
                normalize normExpr (substExpr sigma e)
 
 --- Infer the type for a rule.
 eqsRule :: TypeExpr -> ARule TypeExpr -> TIM TypeEqs
 eqsRule ty (ARule     ty2 vs e)
-  = returnES [ty =.= ty2, ty2 =.= foldr1 FuncType (map snd vs ++ [exprType e])]
+  = return [ty =.= ty2, ty2 =.= foldr1 FuncType (map snd vs ++ [exprType e])]
     ++= eqsExpr e
-eqsRule ty (AExternal ty2    _) = returnES [ty =.= ty2]
+eqsRule ty (AExternal ty2    _) = return [ty =.= ty2]
 
 --- Recursively generate equations for unification from an expression.
 ---
@@ -497,33 +505,33 @@ eqsRule ty (AExternal ty2    _) = returnES [ty =.= ty2]
 --- @return a list of type equations generated from `e`.
 eqsExpr :: AExpr TypeExpr -> TIM TypeEqs
 -- No equations to generate.
-eqsExpr (AVar _  _)       = returnES []
+eqsExpr (AVar _  _)       = return []
 -- The type of the expression is equal to the type of the literal.
-eqsExpr (ALit ty l)       = returnES [ty =.= literalType l]
+eqsExpr (ALit ty l)       = return [ty =.= literalType l]
 -- Match the types of the argument expressions and the result type
 -- to the type of the function or constructor.
 eqsExpr (AComb ty _ (_, fty) es)
-  = returnES [fty =.= foldr1 FuncType (map exprType es ++ [ty])]
-    ++= concatMapES eqsExpr es
+  = return [fty =.= foldr1 FuncType (map exprType es ++ [ty])]
+    ++= concatMapM eqsExpr es
 -- Generate equations for the subject and the branches.
-eqsExpr (ACase ty _ e bs) = eqsExpr e ++= concatMapES (eqsBranch ty e) bs
+eqsExpr (ACase ty _ e bs) = eqsExpr e ++= concatMapM (eqsBranch ty e) bs
 -- The type of the expression must be equal to the types
 -- of both argument expressions.
-eqsExpr (AOr ty a b) = returnES [exprType a =.= ty, exprType b =.= ty]
+eqsExpr (AOr ty a b) = return [exprType a =.= ty, exprType b =.= ty]
                        ++= eqsExpr a ++= eqsExpr b
 -- The type of the expression must be equal to the type of the inner expression.
 -- The type of each bound variable must be equal to the type of the
 -- corresponding expression.
 eqsExpr (ALet ty bs e)
-  =     returnES [ty =.= exprType e]
-    ++= returnES (map (\ ((_, vty), b) -> vty =.= exprType b) bs)
-    ++= concatMapES eqsExpr (e : map snd bs)
+  =     return [ty =.= exprType e]
+    ++= return (map (\ ((_, vty), b) -> vty =.= exprType b) bs)
+    ++= concatMapM eqsExpr (e : map snd bs)
 -- The type of the expression itself must be equal to the type
 -- of the inner expression.
-eqsExpr (AFree ty   _ e) = returnES [ty =.= exprType e] ++= eqsExpr e
+eqsExpr (AFree ty   _ e) = return [ty =.= exprType e] ++= eqsExpr e
 -- The type of the expression must be equal to the type of the argument
 -- expression and to the specified type.
-eqsExpr (ATyped ty e tz) = returnES [ty =.= exprType e, ty =.= tz] ++= eqsExpr e
+eqsExpr (ATyped ty e tz) = return [ty =.= exprType e, ty =.= tz] ++= eqsExpr e
 
 --- Generate equations for a branch.
 ---
@@ -536,7 +544,7 @@ eqsExpr (ATyped ty e tz) = returnES [ty =.= exprType e, ty =.= tz] ++= eqsExpr e
 --- @param subj - the case's subject expression
 --- @param b    - the branch
 eqsBranch :: TypeExpr -> AExpr TypeExpr -> ABranchExpr TypeExpr -> TIM TypeEqs
-eqsBranch ty s (ABranch p be) = returnES [ty =.= exprType be]
+eqsBranch ty s (ABranch p be) = return [ty =.= exprType be]
   ++= eqsPattern (exprType s) p ++= eqsExpr be
 
 --- Generate equations for a pattern.
@@ -548,9 +556,9 @@ eqsBranch ty s (ABranch p be) = returnES [ty =.= exprType be]
 ---    of the literal.
 eqsPattern :: TypeExpr -> APattern TypeExpr -> TIM TypeEqs
 eqsPattern ty (APattern  pty (_, cty) vs)
-  = returnES [ty =.= pty, cty =.= foldr1 FuncType (map snd vs ++ [pty])]
+  = return [ty =.= pty, cty =.= foldr1 FuncType (map snd vs ++ [pty])]
 eqsPattern ty (ALPattern pty           l)
-  = returnES [ty =.= pty, pty =.= literalType l]
+  = return [ty =.= pty, pty =.= literalType l]
 
 --- Extract the type of a Literal.
 literalType :: Literal -> TypeExpr
@@ -569,9 +577,9 @@ exprType = AFC.annExpr
 --- Solve a list of type equations using unification.
 solve :: P.Doc -> TypeEqs -> TIM AFCSubst
 solve what eqs = case unify (fromTypeEqs eqs) of
-  Left  err -> failES $ P.showWidth 80 $ ppUnificationError err
+  Left  err -> throwError $ P.showWidth 80 $ ppUnificationError err
                  P.<+> P.text "during type inference for:" P.<$$> P.nest 2 what
-  Right sub -> returnES (mapFM (\_ -> toTypeExpr) sub)
+  Right sub -> return (Map.mapWithKey (\_ -> toTypeExpr) sub)
 
 --- Converts a list of type expression equations into term equations.
 fromTypeEqs :: TypeEqs -> TermEqs String
@@ -631,16 +639,12 @@ ppUnificationError (OccurCheck v t)
 
 -- We need to keep the next fresh variable number to assign and a mapping from
 -- existing variable numbers to newly assigned ones.
--- Note that we do not need the error functionality but reuse the ES monad
--- to avoid writing our own state monad.
-type NormState   = (Int, FM Int Int)
-type Normalize a = a -> ES () NormState a
+type NormState   = (Int, Map.Map Int Int)
+type Normalize a = a -> State NormState a
 
 --- Run a normalization operation.
-normalize :: Show a => Normalize a -> a -> ES String s a
-normalize norm x = case evalES (norm x) (0, emptyFM (<)) of
-  Left  _  -> failES $ "Normalization failed for: " ++ show x
-  Right x' -> returnES x'
+normalize :: (Monad m, Show a) => Normalize a -> a -> m a
+normalize norm x = return $ evalState (norm x) (0, Map.empty)
 
 --- Normalizes the type variable numbers in the given function.
 --- The parameters of the function are always the first types to be
@@ -656,15 +660,15 @@ normFunc (AFunc f a v t r) = AFunc f a v <$> normType t <*> normRule r
 --- @param type - the type expression to normalize
 --- @return the normalized type expression
 normType :: Normalize TypeExpr
-normType (TVar        i) = gets >+= \(n, fm) -> case lookupFM fm i of
-  Nothing -> puts (n + 1, addToFM fm i n) >+ returnES (TVar n)
-  Just n' -> returnES (TVar n')
-normType (TCons   q tys) = TCons q <$> mapES normType tys
+normType (TVar        i) = get >>= \(n, fm) -> case Map.lookup i fm of
+  Nothing -> put (n + 1, Map.insert i n fm) >> return (TVar n)
+  Just n' -> return (TVar n')
+normType (TCons   q tys) = TCons q <$> mapM normType tys
 normType (FuncType  a b) = FuncType <$> normType a <*> normType b
 
 --- Normalize a rule.
 normRule :: Normalize (ARule TypeExpr)
-normRule (ARule     ty vs e) = ARule <$> normType ty <*> mapES normSnd vs
+normRule (ARule     ty vs e) = ARule <$> normType ty <*> mapM normSnd vs
                                                      <*> normExpr e
 normRule (AExternal ty    s) = flip AExternal s <$> normType ty
 
@@ -679,19 +683,19 @@ normExpr :: Normalize (AExpr TypeExpr)
 normExpr (AVar  t       v) = flip AVar  v  <$> normType t
 normExpr (ALit  t       l) = flip ALit  l  <$> normType t
 normExpr (AComb t ct f es) = flip AComb ct <$> normType t
-                                           <*> normSnd f <*> mapES normExpr es
-normExpr (ALet  t    ds e) = ALet <$> normType t <*> mapES normBinding ds
+                                           <*> normSnd f <*> mapM normExpr es
+normExpr (ALet  t    ds e) = ALet <$> normType t <*> mapM normBinding ds
                                                  <*> normExpr e
   where normBinding (v, b) = (\x y -> (x,y)) <$> normSnd  v <*> normExpr b
 normExpr (AOr   t     a b) = AOr <$> normType t <*> normExpr a <*> normExpr b
 normExpr (ACase t ct e bs) = flip ACase ct <$> normType t <*> normExpr e
-                                           <*> mapES normBranch bs
-normExpr (AFree  t   vs e) = AFree  <$> normType t <*> mapES normSnd vs
+                                           <*> mapM normBranch bs
+normExpr (AFree  t   vs e) = AFree  <$> normType t <*> mapM normSnd vs
                                     <*> normExpr e
 normExpr (ATyped t    e y) = ATyped <$> normType t <*> normExpr e <*> normType y
 
 normSnd :: Normalize (a, TypeExpr)
-normSnd (a, ty) = normType ty >+= \ty' -> returnES (a, ty')
+normSnd (a, ty) = normType ty >>= \ty' -> return (a, ty')
 
 --- Normalizes type variable numbers in a branch. State is managed
 --- using the state monad, see normExpr for details.
@@ -704,5 +708,5 @@ normBranch (ABranch p e) = ABranch <$> normPattern p <*> normExpr e
 
 normPattern :: Normalize (APattern TypeExpr)
 normPattern (APattern  t c vs) = APattern <$> normType t <*> normSnd c
-                                          <*> mapES normSnd vs
+                                          <*> mapM normSnd vs
 normPattern (ALPattern t    l) = flip ALPattern l <$> normType t
