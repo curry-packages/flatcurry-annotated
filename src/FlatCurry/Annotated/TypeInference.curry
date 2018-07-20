@@ -56,8 +56,9 @@ import qualified Data.Map as Map
 import           Data.List                          (find)
 import qualified Text.Pretty as P
 
-import           Control.Monad.Trans.Error
+import           Control.Monad.Extra
 import           Control.Monad.Trans.State
+import           Control.Monad.Trans.Error
 import           Control.Applicative
 import           FlatCurry.Types
 import           FlatCurry.Files
