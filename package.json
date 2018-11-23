@@ -13,6 +13,7 @@
         "flatcurry"    : ">= 2.0.0",
         "frontend-exec": ">= 0.0.1",
         "rewriting"    : ">= 2.0.0",
+        "scc"          : ">= 0.0.1",
         "wl-pprint"    : ">= 0.0.1"
     },
     "compilerCompatibility": {

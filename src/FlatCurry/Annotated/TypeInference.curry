@@ -65,7 +65,7 @@ import qualified FlatCurry.Annotated.Goodies as AFC (annExpr, funcName)
 import           FlatCurry.Annotated.Pretty         (ppQName, ppExp, ppTypeExp
                                                     , ppVarIndex)
 import           FlatCurry.Annotated.TypeSubst
-import           SCC
+import           Data.SCC
 import           Rewriting.Term
 import           Rewriting.Unification
 import           Unsafe
