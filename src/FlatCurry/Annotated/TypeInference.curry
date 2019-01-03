@@ -52,10 +52,10 @@ module FlatCurry.Annotated.TypeInference
   , inferExpr, inferExprEnv
   ) where
 
-import           FiniteMap
 import           List                               (find)
-import qualified Text.Pretty as P
 
+import           Data.FiniteMap
+import           Data.SCC
 import           ErrorState
 import           FlatCurry.Types
 import           FlatCurry.Files
@@ -65,7 +65,7 @@ import qualified FlatCurry.Annotated.Goodies as AFC (annExpr, funcName)
 import           FlatCurry.Annotated.Pretty         (ppQName, ppExp, ppTypeExp
                                                     , ppVarIndex)
 import           FlatCurry.Annotated.TypeSubst
-import           Data.SCC
+import qualified Text.Pretty as P
 import           Rewriting.Term
 import           Rewriting.Unification
 import           Unsafe
