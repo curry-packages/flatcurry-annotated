@@ -344,6 +344,9 @@ freshVariant ty = snd <$> rename [] ty
                               returnES (ren2, FuncType a' b')
   rename ren (TCons  t tys) = mapAccumES rename ren tys >+= \(ren', tys') ->
                               returnES (ren', TCons t tys')
+  rename _   (ForallType _ _) =
+    error $ "FlatCurry.Annotated.TypeInference.freshVariant: " ++
+            "ForallType not yet supported!"
 
 -- -----------------------------------------------------------------------------
 -- 2. Annotation, traversing the AST and inserting fresh type variables
@@ -586,6 +589,9 @@ fromTypeExpr :: TypeExpr -> Term String
 fromTypeExpr (TVar       n) = TermVar n
 fromTypeExpr (TCons   t vs) = TermCons (fromQName t) (map fromTypeExpr vs)
 fromTypeExpr (FuncType a b) = TermCons "->" [fromTypeExpr a, fromTypeExpr b]
+fromTypeExpr (ForallType _ _) =
+  error $ "FlatCurry.Annotated.TypeInference.fromTypeExpr: " ++
+          "ForallType not yet supported!"
 
 --- Converts the given unification term into a type expression
 toTypeExpr :: Term String -> TypeExpr
@@ -661,6 +667,9 @@ normType (TVar        i) = gets >+= \(n, fm) -> case lookupFM fm i of
   Just n' -> returnES (TVar n')
 normType (TCons   q tys) = TCons q <$> mapES normType tys
 normType (FuncType  a b) = FuncType <$> normType a <*> normType b
+normType (ForallType _ _) =
+    error $ "FlatCurry.Annotated.TypeInference.normType: " ++
+            "ForallType not yet supported!"
 
 --- Normalize a rule.
 normRule :: Normalize (ARule TypeExpr)
