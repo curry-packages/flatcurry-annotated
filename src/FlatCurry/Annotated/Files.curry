@@ -1,11 +1,10 @@
 ------------------------------------------------------------------------------
 --- This library supports meta-programming, i.e., the manipulation of
 --- Curry programs in Curry. This library defines I/O actions
----  to read Curry programs and transform them into this representation.
+--- to read Curry programs and transform them into this representation.
 ---
 --- @author Michael Hanus
---- @version October 2015
---- @category meta
+--- @version December 2018
 ------------------------------------------------------------------------------
 
 module FlatCurry.Annotated.Files where
@@ -45,7 +44,12 @@ typedFlatCurryFileName prog = inCurrySubdir (stripCurrySuffix prog) <.> "tfcy"
 readTypedFlatCurryFile :: String -> IO (AProg TypeExpr)
 readTypedFlatCurryFile filename = do
   filecontents <- readTypedFlatCurryFileRaw filename
-  return (read filecontents)
+  -- ...with generated Read class instances (slow!):
+  --return (read filecontents)
+  -- ...with built-in generic read operation (faster):
+  return (readUnqualifiedTerm ["FlatCurry.Annotated.Types", "FlatCurry.Types",
+                               "Prelude"]
+                              filecontents)
 
 readTypedFlatCurryFileRaw :: String -> IO String
 readTypedFlatCurryFileRaw filename = do
