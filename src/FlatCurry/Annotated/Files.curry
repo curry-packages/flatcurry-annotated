@@ -11,7 +11,8 @@ module FlatCurry.Annotated.Files where
 
 import System.FilePath  (takeFileName, (</>), (<.>))
 import System.Directory (doesFileExist, getFileWithSuffix)
-import Distribution     ( FrontendParams, FrontendTarget (..), defaultParams
+import Language.Curry.Distribution
+                        ( FrontendParams, FrontendTarget (..), defaultParams
                         , setQuiet, inCurrySubdir, stripCurrySuffix
                         , callFrontend, callFrontendWithParams
                         , lookupModuleSourceInLoadPath, getLoadPathForModule
