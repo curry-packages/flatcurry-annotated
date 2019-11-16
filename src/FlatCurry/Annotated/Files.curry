@@ -13,9 +13,10 @@ import System.FilePath  (takeFileName, (</>), (<.>))
 import System.Directory (doesFileExist, getFileWithSuffix)
 import System.FrontendExec
                         ( FrontendParams, FrontendTarget (..), defaultParams
-                        , setQuiet, inCurrySubdir, stripCurrySuffix
-                        , callFrontend, callFrontendWithParams
-                        , lookupModuleSourceInLoadPath, getLoadPathForModule
+                        , setQuiet
+                        , callFrontend, callFrontendWithParams)
+import System.CurryPath ( lookupModuleSourceInLoadPath, getLoadPathForModule
+                        , inCurrySubdir, stripCurrySuffix
                         )
 import Data.Maybe       (isNothing)
 import ReadShowTerm     (readUnqualifiedTerm, showTerm)
