@@ -278,10 +278,10 @@ tConsArgs texpr = case texpr of
   _              -> error "AnnotatedFlatCurryGoodies.tConsArgs: no functional type"
 
 --- transform type expression
-trTypeExpr :: (TVarIndex -> a) ->
-              (QName -> [a] -> a) ->
-              (a -> a -> a) ->
-              ([TVarIndex] -> a -> a) -> TypeExpr -> a
+--trTypeExpr :: (TVarIndex -> a) ->
+--              (QName -> [a] -> a) ->
+--              (a -> a -> a) ->
+--              ([(TVarIndex, Kind)] -> a -> a) -> TypeExpr -> a
 trTypeExpr tvar _ _ _ (TVar n) = tvar n
 trTypeExpr tvar tcons functype foralltype (TCons name args)
   = tcons name (map (trTypeExpr tvar tcons functype foralltype) args)
@@ -328,7 +328,7 @@ updFuncTypes :: (TypeExpr -> TypeExpr -> TypeExpr) -> TypeExpr -> TypeExpr
 updFuncTypes functype = trTypeExpr TVar TCons functype ForallType
 
 --- update all forall types
-updForallTypes :: ([TVarIndex] -> TypeExpr -> TypeExpr) -> TypeExpr -> TypeExpr
+--updForallTypes :: ([(TVarIndex, Kind)] -> TypeExpr -> TypeExpr) -> TypeExpr -> TypeExpr
 updForallTypes = trTypeExpr TVar TCons FuncType
 
 -- Auxiliary Functions
