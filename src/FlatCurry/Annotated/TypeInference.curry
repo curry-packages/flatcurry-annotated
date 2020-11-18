@@ -52,16 +52,14 @@ module FlatCurry.Annotated.TypeInference
   , inferExpr, inferExprEnv
   ) where
 
-import qualified Data.Map as Map
-import           Data.List                          (find)
-import           Data.SCC
-import qualified Text.Pretty as P
-
 import           Control.Monad.Extra                (concatMapM, mapAccumM)
 import           Control.Monad.Trans.Class          (lift)
 import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Except
 import           Control.Applicative
+import qualified Data.Map as Map
+import           Data.List                          (find)
+import           Data.SCC
 import           FlatCurry.Types
 import           FlatCurry.Files
 import           FlatCurry.Goodies                  (branchExpr, funcName)
