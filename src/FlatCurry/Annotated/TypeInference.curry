@@ -54,8 +54,10 @@ module FlatCurry.Annotated.TypeInference
 
 import qualified Data.Map as Map
 import           Data.List                          (find)
+import           Data.SCC
 import qualified Text.Pretty as P
 
+import           Control.Monad.Extra                (concatMapM, mapAccumM)
 import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Except
 import           Control.Applicative
