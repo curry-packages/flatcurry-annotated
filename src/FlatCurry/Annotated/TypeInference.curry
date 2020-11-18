@@ -58,6 +58,7 @@ import           Data.SCC
 import qualified Text.Pretty as P
 
 import           Control.Monad.Extra                (concatMapM, mapAccumM)
+import           Control.Monad.Trans.Class          (lift)
 import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Except
 import           Control.Applicative
@@ -232,7 +233,7 @@ getTypeEnv p = do
 --- @param p - the Prog whose imports should be read
 --- @return the list of interface Progs
 extractImported :: Prog -> IO [Prog]
-extractImported (Prog _ is _ _ _) = mapIO readFlatCurryInt is
+extractImported (Prog _ is _ _ _) = mapM readFlatCurryInt is
 
 --- Extract the type environment from the given Prog by lookup in a
 --- module name -> Prog environment.
@@ -269,10 +270,10 @@ extractKnownTypes ps = Map.fromList $ concatMap extractProg ps
 
   extractTypeDecl :: TypeDecl -> [(QName, TypeExpr)]
   extractTypeDecl (TypeSyn  n _ _ ty) = [(n, ty)]
-  extractTypeDecl (TypeNew  n _ vs c) = extractNewConsDecl ty c
-    where ty = TCons n (map TVar vs)
+  extractTypeDecl (TypeNew  n _ vs c) = pure $ extractNewConsDecl ty c
+    where ty = TCons n (map (TVar . fst) vs)
   extractTypeDecl (Type    n _ vs cs) = map (extractConsDecl ty) cs
-    where ty = TCons n (map TVar vs)
+    where ty = TCons n (map (TVar . fst) vs)
 
   extractConsDecl :: TypeExpr -> ConsDecl -> (QName, TypeExpr)
   extractConsDecl ty (Cons n _ _ tys) = (n, foldr FuncType ty tys)
