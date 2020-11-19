@@ -52,14 +52,14 @@ module FlatCurry.Annotated.TypeInference
   , inferExpr, inferExprEnv
   ) where
 
+import           Control.Monad.Extra                (concatMapM, mapAccumM)
+import           Control.Monad.Trans.Class          (lift)
+import           Control.Monad.Trans.State
+import           Control.Monad.Trans.Except
+import           Control.Applicative
 import qualified Data.Map as Map
 import           Data.List                          (find)
-import qualified Text.Pretty as P
-
-import           Control.Monad.Extra
-import           Control.Monad.Trans.State
-import           Control.Monad.Trans.Error
-import           Control.Applicative
+import           Data.SCC
 import           FlatCurry.Types
 import           FlatCurry.Files
 import           FlatCurry.Goodies                  (branchExpr, funcName)
@@ -160,7 +160,7 @@ inferNewFunctionsEnv te mid fs = evalErrorState (infer (depGraph mid fs)) (initT
                   return afs
   extract f afs = case find ((== funcName f) . AFC.funcName) afs of
     Just af -> return af
-    Nothing -> throwError "Internal error: extract"
+    Nothing -> throwE "Internal error: extract"
 
 --- Infers the types of a single expression.
 --- Uses the given type environment instead of generating a new one.
@@ -171,8 +171,8 @@ inferNewFunctionsEnv te mid fs = evalErrorState (infer (depGraph mid fs)) (initT
 inferExprEnv :: TypeEnv -> Expr -> Either String (AExpr TypeExpr)
 inferExprEnv te e = evalErrorState (annExpr e >>= inferAExpr) (initTIM te)
 
-evalErrorState :: ErrorT e (State s) a -> s -> Either e a
-evalErrorState es s = evalState (runErrorT es) s
+evalErrorState :: ExceptT e (State s) a -> s -> Either e a
+evalErrorState es s = evalState (runExceptT es) s
 
 -- ---------------------------------------------------------------------------
 -- Computation of dependency graph and strongly connected components
@@ -231,7 +231,7 @@ getTypeEnv p = do
 --- @param p - the Prog whose imports should be read
 --- @return the list of interface Progs
 extractImported :: Prog -> IO [Prog]
-extractImported (Prog _ is _ _ _) = mapIO readFlatCurryInt is
+extractImported (Prog _ is _ _ _) = mapM readFlatCurryInt is
 
 --- Extract the type environment from the given Prog by lookup in a
 --- module name -> Prog environment.
@@ -268,11 +268,16 @@ extractKnownTypes ps = Map.fromList $ concatMap extractProg ps
 
   extractTypeDecl :: TypeDecl -> [(QName, TypeExpr)]
   extractTypeDecl (TypeSyn  n _ _ ty) = [(n, ty)]
+  extractTypeDecl (TypeNew  n _ vs c) = pure $ extractNewConsDecl ty c
+    where ty = TCons n (map (TVar . fst) vs)
   extractTypeDecl (Type    n _ vs cs) = map (extractConsDecl ty) cs
-    where ty = TCons n (map TVar vs)
+    where ty = TCons n (map (TVar . fst) vs)
 
   extractConsDecl :: TypeExpr -> ConsDecl -> (QName, TypeExpr)
   extractConsDecl ty (Cons n _ _ tys) = (n, foldr FuncType ty tys)
+
+  extractNewConsDecl :: TypeExpr -> NewConsDecl -> (QName, TypeExpr)
+  extractNewConsDecl ty (NewCons n _ ty') = (n, FuncType ty' ty)
 
   typeArity :: TypeExpr -> Int
   typeArity ty = case ty of
@@ -287,7 +292,7 @@ extractKnownTypes ps = Map.fromList $ concatMap extractProg ps
 --- and a mapping from variable indices to their associated type
 --- variables. It returns a `String` if an error occured.
 type TIS = (TypeEnv, Int, TypeEnv, Map.Map Int TypeExpr)
-type TIM a =  ErrorT String (State TIS) a
+type TIM = ExceptT String (State TIS)
 
 --- Initial TIM state.
 initTIM :: TypeEnv -> TIS
@@ -334,7 +339,7 @@ lookupVarType v = lift (get >>= \ (_, _, _, var2Ty) ->
 getTypeVariant :: QName -> TIM (QName, TypeExpr)
 getTypeVariant f = lift get >>= \ (env, _, fe, _) -> case lookupType env f of
   Nothing -> case Map.lookup f fe of
-    Nothing -> throwError $ "Internal error: getTypeVariant " ++ show f
+    Nothing -> throwE $ "Internal error: getTypeVariant " ++ show f
     Just ty -> return (f, ty)
   Just t  -> freshVariant t >>= \ty -> return (f, ty)
 
@@ -388,7 +393,7 @@ annRule (External s) = flip AExternal s <$> nextTVar
 --- Converts the Expr to an AExpr, inserting TVars into all sub-expressions.
 annExpr :: Expr -> TIM (AExpr TypeExpr)
 annExpr (Var       i) = lookupVarType i >>=
-                        maybe (throwError err) (\ty -> return (AVar ty i))
+                        maybe (throwE err) (\ty -> return (AVar ty i))
   where err = P.showWidth 80 $ P.text "Variable" P.<+> ppVarIndex i
                       P.<+> P.text "was not initialized with a type"
 annExpr (Lit       l) = nextTVar >>= \ty -> return (ALit ty l)
@@ -416,7 +421,7 @@ annVar v = nextTVar >>= \ty -> insertVarType v ty >> return (v, ty)
 --- in FlatCurry files. This is our basic assumption in this type inferencer,
 --- and must therefore be met. Otherwise, the type inference must be extended.
 checkShadowing :: VarIndex -> TIM ()
-checkShadowing v = lookupVarType v >>= maybe (return ()) (\_ -> throwError err)
+checkShadowing v = lookupVarType v >>= maybe (return ()) (\_ -> throwE err)
   where err = P.showWidth 80 $ P.text "shadowing with variable" P.<+> ppVarIndex v
 
 --- Converts the BranchExpr to an ABranchExpr, inserting TVars
@@ -581,7 +586,7 @@ exprType = AFC.annExpr
 --- Solve a list of type equations using unification.
 solve :: P.Doc -> TypeEqs -> TIM AFCSubst
 solve what eqs = case unify (fromTypeEqs eqs) of
-  Left  err -> throwError $ P.showWidth 80 $ ppUnificationError err
+  Left  err -> throwE $ P.showWidth 80 $ ppUnificationError err
                  P.<+> P.text "during type inference for:" P.<$$> P.nest 2 what
   Right sub -> return (Map.mapWithKey (\_ -> toTypeExpr) sub)
 
