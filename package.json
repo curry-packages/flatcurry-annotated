@@ -6,7 +6,6 @@
     "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
     "category": [ "Metaprogramming" ],
     "description": "This package contain libraries to represent FlatCurry programs with arbitrary annotations. Furthermore, it contains libraries to annotate each expression occurring in a given FlatCurry program with type information.",
-    "category": [ "Metaprogramming" ],
     "license": "BSD-3-Clause",
     "licenseFile": "LICENSE",
     "dependencies": {
