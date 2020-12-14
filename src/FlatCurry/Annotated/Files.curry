@@ -24,56 +24,56 @@ import FlatCurry.Annotated.Types
 --- Transforms a name of a Curry program (with or without suffix ".curry"
 --- or ".lcurry") into the name of the file containing the
 --- corresponding type-annotated FlatCurry program.
-typedFlatCurryFileName :: String -> String
-typedFlatCurryFileName prog = inCurrySubdir (stripCurrySuffix prog) <.> "tfcy"
+annotatedFlatCurryFileName :: String -> String
+annotatedFlatCurryFileName prog = inCurrySubdir (stripCurrySuffix prog) <.> "tafcy"
 
 --- Gets the standard type-annotated FlatCurry file location
 --- for a given Curry module name.
 --- The Curry source program must exist in the Curry load path,
 --- otherwise an error is raised.
-typedFlatCurryFilePath :: String -> IO String
-typedFlatCurryFilePath mname = do
+annotatedFlatCurryFilePath :: String -> IO String
+annotatedFlatCurryFilePath mname = do
   mbsrc <- lookupModuleSourceInLoadPath mname
   case mbsrc of
     Nothing      -> error $ "Curry source file for module '" ++ mname ++
                             "' not found!"
-    Just (dir,_) -> return (typedFlatCurryFileName (dir </> mname))
+    Just (dir,_) -> return (annotatedFlatCurryFileName (dir </> mname))
 
 --- I/O action which parses a Curry program and returns the corresponding
 --- type-annotated FlatCurry program.
 --- The argument is the module path (without suffix ".curry"
 --- or ".lcurry") and the result is a type-annotated FlatCurry term
 --- representing this program.
-readTypedFlatCurry :: String -> IO (AProg TypeExpr)
-readTypedFlatCurry progname =
-   readTypedFlatCurryWithParseOptions progname (setQuiet True defaultParams)
+readAnnotatedFlatCurry :: String -> IO (AProg TypeExpr)
+readAnnotatedFlatCurry progname =
+   readAnnotatedFlatCurryWithParseOptions progname (setQuiet True defaultParams)
 
 --- I/O action which parses a Curry program
 --- with respect to some parser options and returns the
 --- corresponding FlatCurry program.
---- This I/O action is used by `readTypedFlatCurry`.
+--- This I/O action is used by `readAnnotatedFlatCurry`.
 --- @param progfile - the program file name (without suffix ".curry")
 --- @param options - parameters passed to the front end
-readTypedFlatCurryWithParseOptions :: String -> FrontendParams
+readAnnotatedFlatCurryWithParseOptions :: String -> FrontendParams
                                    -> IO (AProg TypeExpr)
-readTypedFlatCurryWithParseOptions progname options = do
+readAnnotatedFlatCurryWithParseOptions progname options = do
   mbsrc <- lookupModuleSourceInLoadPath progname
   case mbsrc of
     Nothing -> do -- no source file, try to find FlatCurry file in load path:
       loadpath <- getLoadPathForModule progname
       filename <- getFileWithSuffix
-                    (typedFlatCurryFileName (takeFileName progname)) [""]
+                    (annotatedFlatCurryFileName (takeFileName progname)) [""]
                     loadpath
-      readTypedFlatCurryFile filename
+      readAnnotatedFlatCurryFile filename
     Just (dir,_) -> do
       callFrontendWithParams TFCY options progname
-      readTypedFlatCurryFile (typedFlatCurryFileName (dir </> takeFileName progname))
+      readAnnotatedFlatCurryFile (annotatedFlatCurryFileName (dir </> takeFileName progname))
 
---- Reads a type-annotated FlatCurry program from a file in `.tfcy` format
+--- Reads a type-annotated FlatCurry program from a file in `.tafcy` format
 --- where the file name is provided as the argument.
-readTypedFlatCurryFile :: String -> IO (AProg TypeExpr)
-readTypedFlatCurryFile filename = do
-  filecontents <- readTypedFlatCurryFileRaw filename
+readAnnotatedFlatCurryFile :: String -> IO (AProg TypeExpr)
+readAnnotatedFlatCurryFile filename = do
+  filecontents <- readAnnotatedFlatCurryFileRaw filename
   -- ...with generated Read class instances (slow!):
   --return (read filecontents)
   -- ...with built-in generic read operation (faster):
@@ -81,7 +81,7 @@ readTypedFlatCurryFile filename = do
                                "Prelude"]
                               filecontents)
  where
-  readTypedFlatCurryFileRaw fname = do
+  readAnnotatedFlatCurryFileRaw fname = do
     extfcy <- doesFileExist fname
     if extfcy
       then readFile fname
@@ -93,18 +93,18 @@ readTypedFlatCurryFile filename = do
           else error $ "EXISTENCE ERROR: Typed FlatCurry file '" ++
                        fname ++ "' does not exist"
 
---- Writes a type-annotated FlatCurry program into a file in `.tfcy` format.
+--- Writes a type-annotated FlatCurry program into a file in `.tafcy` format.
 --- The file is written in the standard location for intermediate files,
---- i.e., in the 'typedFlatCurryFileName' relative to the directory of the
+--- i.e., in the 'annotatedFlatCurryFileName' relative to the directory of the
 --- Curry source program (which must exist!).
-writeTypedFlatCurry :: AProg TypeExpr -> IO ()
-writeTypedFlatCurry prog@(AProg mname _ _ _ _) = do
-  fname <- typedFlatCurryFilePath mname
-  writeTypedFlatCurryFile fname prog
+writeAnnotatedFlatCurry :: AProg TypeExpr -> IO ()
+writeAnnotatedFlatCurry prog@(AProg mname _ _ _ _) = do
+  fname <- annotatedFlatCurryFilePath mname
+  writeAnnotatedFlatCurryFile fname prog
 
---- Writes a type-annotated FlatCurry program into a file in ".tfcy" format.
+--- Writes a type-annotated FlatCurry program into a file in ".tafcy" format.
 --- The first argument must be the name of the target file
 --- (with suffix `.fcy`).
-writeTypedFlatCurryFile :: String -> AProg TypeExpr -> IO ()
-writeTypedFlatCurryFile file prog = writeFile file (showTerm prog)
+writeAnnotatedFlatCurryFile :: String -> AProg TypeExpr -> IO ()
+writeAnnotatedFlatCurryFile file prog = writeFile file (showTerm prog)
 
