@@ -66,7 +66,7 @@ readAnnotatedFlatCurryWithParseOptions progname options = do
                     loadpath
       readAnnotatedFlatCurryFile filename
     Just (dir,_) -> do
-      callFrontendWithParams TFCY options progname
+      callFrontendWithParams TAFCY options progname
       readAnnotatedFlatCurryFile (annotatedFlatCurryFileName (dir </> takeFileName progname))
 
 --- Reads a type-annotated FlatCurry program from a file in `.tafcy` format
