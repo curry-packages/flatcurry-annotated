@@ -5,19 +5,15 @@
     "maintainer": "Michael Hanus <mh@informatik.uni-kiel.de>",
     "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
     "category": [ "Metaprogramming" ],
-    "description": "This package contain libraries to represent FlatCurry programs with arbitrary annotations. Furthermore, it contains libraries to annotate each expression occurring in a given FlatCurry program with type information.",
+    "description": "This package contain libraries to represent FlatCurry programs with arbitrary annotations.",
     "license": "BSD-3-Clause",
     "licenseFile": "LICENSE",
     "dependencies": {
         "base"         : ">= 3.0.0, < 4.0.0",
         "currypath"    : ">= 3.0.0, < 4.0.0",
-        "containers"   : ">= 3.0.0, < 4.0.0",
-        "extra"        : ">= 3.0.0, < 4.0.0",
+        "directory"    : ">= 3.0.0, < 4.0.0",
+        "filepath"     : ">= 3.0.0, < 4.0.0",
         "flatcurry"    : ">= 3.0.0, < 4.0.0",
-        "frontend-exec": ">= 3.0.0, < 4.0.0",
-        "rewriting"    : ">= 3.0.0, < 4.0.0",
-        "scc"          : ">= 3.0.0, < 4.0.0",
-        "transformers" : ">= 3.0.0, < 4.0.0",
         "wl-pprint"    : ">= 3.0.0, < 4.0.0"
     },
     "compilerCompatibility": {
@@ -27,9 +23,7 @@
     "exportedModules": [ "FlatCurry.Annotated.Types",
                          "FlatCurry.Annotated.Files",
                          "FlatCurry.Annotated.Goodies",
-                         "FlatCurry.Annotated.Pretty",
-                         "FlatCurry.Annotated.TypeSubst",
-                         "FlatCurry.Annotated.TypeInference" ],
+                         "FlatCurry.Annotated.Pretty" ],
     "source": {
         "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/flatcurry-annotated.git",
         "tag": "$version"
