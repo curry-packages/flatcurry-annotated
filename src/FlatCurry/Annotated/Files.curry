@@ -25,7 +25,7 @@ import FlatCurry.Annotated.Types
 --- or ".lcurry") into the name of the file containing the
 --- corresponding type-annotated FlatCurry program.
 typedFlatCurryFileName :: String -> String
-typedFlatCurryFileName prog = inCurrySubdir (stripCurrySuffix prog) <.> "tfcy"
+typedFlatCurryFileName prog = inCurrySubdir (stripCurrySuffix prog) <.> "tafcy"
 
 --- Gets the standard type-annotated FlatCurry file location
 --- for a given Curry module name.
@@ -66,10 +66,10 @@ readTypedFlatCurryWithParseOptions progname options = do
                     loadpath
       readTypedFlatCurryFile filename
     Just (dir,_) -> do
-      callFrontendWithParams TFCY options progname
+      callFrontendWithParams TAFCY options progname
       readTypedFlatCurryFile (typedFlatCurryFileName (dir </> takeFileName progname))
 
---- Reads a type-annotated FlatCurry program from a file in `.tfcy` format
+--- Reads a type-annotated FlatCurry program from a file in `.tafcy` format
 --- where the file name is provided as the argument.
 readTypedFlatCurryFile :: String -> IO (AProg TypeExpr)
 readTypedFlatCurryFile filename = do
@@ -93,7 +93,7 @@ readTypedFlatCurryFile filename = do
           else error $ "EXISTENCE ERROR: Typed FlatCurry file '" ++
                        fname ++ "' does not exist"
 
---- Writes a type-annotated FlatCurry program into a file in `.tfcy` format.
+--- Writes a type-annotated FlatCurry program into a file in `.tafcy` format.
 --- The file is written in the standard location for intermediate files,
 --- i.e., in the 'typedFlatCurryFileName' relative to the directory of the
 --- Curry source program (which must exist!).
@@ -102,9 +102,9 @@ writeTypedFlatCurry prog@(AProg mname _ _ _ _) = do
   fname <- typedFlatCurryFilePath mname
   writeTypedFlatCurryFile fname prog
 
---- Writes a type-annotated FlatCurry program into a file in ".tfcy" format.
+--- Writes a type-annotated FlatCurry program into a file in ".tafcy" format.
 --- The first argument must be the name of the target file
---- (with suffix `.fcy`).
+--- (with suffix `.tafcy`).
 writeTypedFlatCurryFile :: String -> AProg TypeExpr -> IO ()
 writeTypedFlatCurryFile file prog = writeFile file (showTerm prog)
 
