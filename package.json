@@ -26,7 +26,7 @@
                          "FlatCurry.Annotated.Goodies",
                          "FlatCurry.Annotated.Pretty" ],
     "source": {
-        "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/flatcurry-annotated.git",
+        "git": "https://github.com/curry-packages/flatcurry-annotated.git",
         "tag": "$version"
     }
 }
