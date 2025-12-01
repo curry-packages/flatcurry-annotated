@@ -12,8 +12,7 @@
 --- is abstracted away, which hopefully makes the code more clear and brief.
 ---
 --- @author Sebastian Fischer, Bjoern Peemoeller
---- @version October 2015
---- @category meta
+--- @version October 2025
 --------------------------------------------------------------------------------
 
 module FlatCurry.Annotated.Goodies where
@@ -1056,18 +1055,23 @@ unAnnRule :: ARule _ -> FC.Rule
 unAnnRule = trRule (\_ vs e -> FC.Rule (map fst vs) (unAnnExpr e))
                    (\_ s -> FC.External s)
 
+-- | Remove annotation from an expression.
+-- Since there is no information about the types of free and let-bound variables
+-- available, the artificial type `Prelude.UNKNONW` is inserted for them.
 unAnnExpr :: AExpr _ -> FC.Expr
 unAnnExpr = trExpr var lit comb lett fre or cse branch typed
   where
   var   _       v = FC.Var v
   lit   _       l = FC.Lit l
   comb  _ ct n es = FC.Comb ct (fst n) es
-  lett  _    bs e = FC.Let (map (\((v, _), b) -> (v, b)) bs) e
-  fre   _    vs e = FC.Free (map fst vs) e
+  lett  _    bs e = FC.Let  (map (\((v, _), b) -> (v, unknownType, b)) bs) e
+  fre   _    vs e = FC.Free (map (\(v,_) -> (v,unknownType)) vs) e
   or    _     a b = FC.Or a b
   cse   _ ct e bs = FC.Case ct e bs
   branch      p e = FC.Branch (unAnnPattern p) e
   typed _    e ty = FC.Typed e ty
+
+  unknownType = FC.TCons ("Prelude","UNKNOWN") [] 
 
 unAnnPattern :: APattern _ -> FC.Pattern
 unAnnPattern = trPattern (\_ qn vs -> FC.Pattern (fst qn) (map fst vs))

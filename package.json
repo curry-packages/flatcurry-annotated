@@ -1,6 +1,6 @@
 {
     "name": "flatcurry-annotated",
-    "version": "3.3.0",
+    "version": "4.0.0",
     "author": "Michael Hanus <mh@informatik.uni-kiel.de>, Jonas Oberschweiber <jonas@oberschweiber.com>, Bjoern Peemoeller <bjp@informatik.uni-kiel.de>",
     "maintainer": "Michael Hanus <mh@informatik.uni-kiel.de>",
     "synopsis": "Libraries to represent FlatCurry programs with arbitrary annotations",
@@ -13,7 +13,7 @@
         "currypath"    : ">= 3.0.0, < 4.0.0",
         "directory"    : ">= 3.0.0, < 4.0.0",
         "filepath"     : ">= 3.0.0, < 4.0.0",
-        "flatcurry"    : ">= 3.0.0, < 5.0.0",
+        "flatcurry"    : ">= 5.0.0, < 6.0.0",
         "wl-pprint"    : ">= 3.0.0, < 4.0.0"
     },
     "compilerCompatibility": {
